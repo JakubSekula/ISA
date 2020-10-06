@@ -6,6 +6,10 @@
 
 using namespace std;
 
+int port = 53;
+string file = "";
+string server = "";
+
 typedef struct {
     uint16_t id;
 # if __BYTE_ORDER ==  __BIG_ENDIAN
@@ -36,10 +40,41 @@ typedef struct {
     uint8_t length;
 } dnshdr;
 
-// 97 - 104
+void getArguments( int argc, char** argv ){
+    int arg;
+    // TODO test -p -f file treba
+    while( ( arg = getopt( argc, argv, "s:p:f:" ) ) != -1 ){
+        switch( arg ){
+            case 's':
+                server = optarg;
+                break;
+            case 'p':
+                port = atoi( optarg );
+                break;
+            case 'f':
+                file = optarg;
+                break;
+            default:
+                // TODO OSETRENI
+                cout << arg;
+                exit( 10 );
+        }
+    }
 
-int main( int argc, char *argv[] ){
+    if( server == "" ){
+        cout << "CHYBA";
+        exit( 11 );
+    } else if ( file == "" ){
+        cout << "CHYBA";
+        exit( 11 );
+    }
+
+}
+
+int main( int argc, char **argv ){
     
+    getArguments( argc, argv );
+
     if( argv[ 1 ] == NULL ){
         cout << "Chybi port argument";
         exit( 5 );
@@ -48,7 +83,6 @@ int main( int argc, char *argv[] ){
     int socketfd, new_socket, fread;
     struct sockaddr_in my_addr, cliaddr;
     int opt = 1;
-    int port = atoi( argv[ 1 ] );
     int addrlen = sizeof( my_addr );
     char buffer[ 1024 ] = {0};
 
