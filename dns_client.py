@@ -39,10 +39,10 @@ def to_hex_string(x):
 
 
 def resolve_host_name(host_name_to):
+  print( "|||" + host_name_to + "|||" )
   """
   Queries the DNS A record for the given host name and returns the result.
   """
-
   host_name_to = host_name_to.split(".")
 
   # Construct the DNS packet consisting of header + QNAME + QTYPE + QCLASS.
@@ -127,6 +127,7 @@ def resolve_host_name(host_name_to):
 
   data, address = client.recvfrom(READ_BUFFER)
 
+
   # Convert data to bit string.
 
   data = bitstring.BitArray(bytes=data)
@@ -142,7 +143,6 @@ def resolve_host_name(host_name_to):
 
   x = 96
   y = x + 8
-
   for i, _ in enumerate(host_name_to):
 
     # Based on the size of the very next label indicated by
