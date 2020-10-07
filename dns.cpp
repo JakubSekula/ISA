@@ -5,35 +5,7 @@ using namespace std;
 int port = 53;
 string file = "";
 string server = "";
-
-typedef struct {
-    uint16_t id;
-# if __BYTE_ORDER ==  __BIG_ENDIAN
-    uint16_t qr:1;
-    uint16_t opcode:4;
-    uint16_t aa:1;
-    uint16_t tc:1;
-    uint16_t rd:1;
-    uint16_t ra:1;
-    uint16_t zero:3;
-    uint16_t rcode:4;
-# elif __BYTE_ORDER == __LITTLE_ENDIAN
-    uint16_t rd:1;
-    uint16_t tc:1;
-    uint16_t aa:1;
-    uint16_t opcode:4;
-    uint16_t qr:1;
-    uint16_t rcode:4;
-    uint16_t zero:3;
-    uint16_t ra:1;
-# else
-#  error "Adjust your <bits/endian.h> defines"
-# endif
-    uint16_t qcount;    /* question count */
-    uint16_t ancount;    /* Answer record count */
-    uint16_t nscount;    /* Name Server (Autority Record) Count */ 
-    uint16_t adcount;    /* Additional Record Count */
-} dnshdr;
+shared_timed_mutex mutex;
 
 string getDnsIp( const char* server ){
     struct addrinfo hints, *res;
@@ -171,61 +143,85 @@ int main( int argc, char **argv ){
         cout << "Error with socket creation";
         exit( 10 );
     }
-
     memset( &my_addr, 0, sizeof( my_addr ) );
-    memset( &cliaddr, 0, sizeof( cliaddr ) );
-
+    
+        
     my_addr.sin_family = AF_INET;
     my_addr.sin_addr.s_addr = INADDR_ANY;
     my_addr.sin_port = htons( port );
+
 
     if( bind( socketfd, ( struct sockaddr *) &my_addr, sizeof( my_addr ) ) < 0 ){
         cout << "Bind error";
         exit( errno );
     }
-
-    int len = sizeof( cliaddr );
-
-    int clientpacket = recvfrom( socketfd, buffer, 1024, 0, ( struct sockaddr *) &cliaddr, ( socklen_t *) &len );
-
-    dnshdr* pd = ( dnshdr* ) buffer;
-
-    int i = 13;
-    int last = i;
-    string domain;
-    int length = buffer[ i - 1 ];
-
-    while( length != 0 ){
-        while( i < last + length ){
-            domain = domain + buffer[ i ];
-            i++;
-        }
-        length = buffer[ i ];
-        i++;
-        last = i;
-        if( length != 0 ){
-            domain = domain + '.';
-        }
-    }
-
-    if( searchFile( domain ) == 0 ){
-        perror( "CHYBA" );
-        exit( 20 );
-    }
-
-    memset( &test, 0, sizeof( test ) );
-
-    test.sin_family = AF_INET;
-    test.sin_addr.s_addr = inet_addr( server.c_str() );
-    test.sin_port = htons( 53 );
-
-    // TODO udp je 8 bajtu header
-    sendto( socketfd, buffer, clientpacket + 8, 0, ( const struct sockaddr * ) &test, len );
     
-    int toclient = recvfrom( socketfd, (char *)buffer, 1024, 0, ( struct sockaddr *) &test, ( socklen_t *) &test );
+    while( 1 ){
+        
+        memset( &cliaddr, 0, sizeof( cliaddr ) );
+        int len = sizeof( cliaddr );
 
-    sendto( socketfd, buffer, toclient, 0, ( const struct sockaddr * ) &cliaddr, sizeof( cliaddr ) );
+        int clientpacket = recvfrom( socketfd, buffer, 1024, 0, ( struct sockaddr *) &cliaddr, ( socklen_t *) &len );
 
-    return 0;
+        cout << "Zprava prijata \n";
+
+        int pid;
+        if( ( pid = fork() ) > 0 ){
+            cout << "Entering parent \n";
+        } else if ( pid == 0 ){
+            cout << "Entering child \n";
+
+            dnshdr* pd = ( dnshdr* ) buffer;
+
+            int i = 13;
+            int last = i;
+            string domain;
+            int length = buffer[ i - 1 ];
+
+            while( length != 0 ){
+                while( i < last + length ){
+                    domain = domain + buffer[ i ];
+                    i++;
+                }
+                length = buffer[ i ];
+                i++;
+                last = i;
+                if( length != 0 ){
+                    domain = domain + '.';
+                }
+            }
+
+            int a = 0;
+
+            if( searchFile( domain ) == 0 ){
+                perror( "CHYBA" );
+                exit( 20 );
+            }
+
+            int newsocket;
+            if( ( newsocket = socket( AF_INET, SOCK_DGRAM, 0 ) ) < 0 ){
+                cout << "Error with socket creation";
+                exit( 10 );
+            }
+
+            memset( &test, 0, sizeof( test ) );
+
+            test.sin_family = AF_INET;
+            test.sin_addr.s_addr = inet_addr( server.c_str() );
+            test.sin_port = htons( 53 );
+
+            // TODO udp je 8 bajtu header
+            sendto( newsocket, buffer, clientpacket + 8, 0, ( const struct sockaddr * ) &test, len );
+            
+            int toclient = recvfrom( newsocket, (char *)buffer, 1024, 0, ( struct sockaddr *) &test, ( socklen_t *) &test );
+
+            sendto( socketfd, buffer, toclient, 0, ( const struct sockaddr * ) &cliaddr, sizeof( cliaddr ) );
+
+            cout << "Child end";
+            close( socketfd );
+            exit( 0 );
+
+        }
+    }
 
 }
