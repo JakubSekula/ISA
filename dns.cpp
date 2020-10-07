@@ -5,7 +5,6 @@ using namespace std;
 int port = 53;
 string file = "";
 string server = "";
-shared_timed_mutex mutex;
 
 string getDnsIp( const char* server ){
     struct addrinfo hints, *res;
@@ -86,9 +85,6 @@ int searchFile( string url ){
     
     vector<string> domain = explode( url, '.' );
 
-    //cout << nationalDomain + "\n";
-    //cout << domain + "\n";
-
     ifstream infile( file );
     string line;
 
@@ -143,8 +139,8 @@ int main( int argc, char **argv ){
         cout << "Error with socket creation";
         exit( 10 );
     }
-    memset( &my_addr, 0, sizeof( my_addr ) );
     
+    memset( &my_addr, 0, sizeof( my_addr ) );
         
     my_addr.sin_family = AF_INET;
     my_addr.sin_addr.s_addr = INADDR_ANY;
@@ -157,7 +153,7 @@ int main( int argc, char **argv ){
     }
     
     while( 1 ){
-        
+
         memset( &cliaddr, 0, sizeof( cliaddr ) );
         int len = sizeof( cliaddr );
 
@@ -191,6 +187,23 @@ int main( int argc, char **argv ){
                 }
             }
 
+            uint16_t* bufferfield = (uint16_t*) buffer;
+            
+            if( clientpacket % 2 != 0 ){
+                bufferfield = (uint16_t*)( ( (char*) bufferfield ) + 1 );
+            }
+
+            clientpacket = clientpacket / 2;
+
+            uint16_t type = bufferfield[ clientpacket - 2 ];
+            /* if( ntohs( type ) == 1 ){
+                exit( 22 );
+            } */
+
+            cout << ntohs(type) << "\n";
+
+            clientpacket = clientpacket * 2;
+
             int a = 0;
 
             if( searchFile( domain ) == 0 ){
@@ -199,6 +212,7 @@ int main( int argc, char **argv ){
             }
 
             int newsocket;
+            
             if( ( newsocket = socket( AF_INET, SOCK_DGRAM, 0 ) ) < 0 ){
                 cout << "Error with socket creation";
                 exit( 10 );
@@ -217,7 +231,6 @@ int main( int argc, char **argv ){
 
             sendto( socketfd, buffer, toclient, 0, ( const struct sockaddr * ) &cliaddr, sizeof( cliaddr ) );
 
-            cout << "Child end";
             close( socketfd );
             exit( 0 );
 

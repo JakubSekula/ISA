@@ -6,7 +6,6 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <shared_mutex>
 #include <netdb.h>
 
 typedef struct {
