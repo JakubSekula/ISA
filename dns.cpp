@@ -13,7 +13,8 @@
  * @brief DNS server
  */
 
-// TODO: python3 dns_client.py apple is it ok ?
+// TODO: je treba neco delat s otevrenym socketem pri exit() ?
+// TODO: vadi kdyz zadany file s domenamy neexistuje ? 
 
 #include "dns.h"
 
@@ -34,8 +35,7 @@ string file = "";
  */
 string server = "";
 
-// TODO: co se stane kdyz neresolvne ?
-/*
+/**
  * @brief Resolves ip of given server
  * @param server ip or server name
  * @return resolved ip
@@ -43,14 +43,14 @@ string server = "";
 string getDnsIp( const char* server ){
     struct addrinfo hints, *res;
     memset( &hints, 0, sizeof ( hints ) );
-    // TODO: STACI ipv4 ?
+
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_STREAM;
-    hints.ai_flags |= AI_CANONNAME;
+    hints.ai_flags = AI_CANONNAME;
     
     if( getaddrinfo ( server, NULL, &hints, &res ) != 0 ){
-        perror ("getaddrinfo");
-        exit( 12 );
+        fprintf( stderr, "Given servername or ip address by -s argument is not resolvable\n" );
+        exit( 11 );
     }
     
     void* ptr;
@@ -63,7 +63,21 @@ string getDnsIp( const char* server ){
     return addrstr.c_str();
 }
 
-/*
+/**
+ * @brief Checks if parametr is numerical
+ * @param s program argument
+ * @return true, or false when argument is not numerical
+ */
+bool isNumber( string s )
+{
+    for( unsigned int i = 0; i < s.length(); i++ )
+        if( isdigit( s[ i ] ) == false )
+            return false;
+ 
+    return true;
+}
+
+/**
  * @brief Loads command line arguments
  * @param -p port number ( optional )
  * @param -s IP adress or domain name of DNS server
@@ -71,7 +85,7 @@ string getDnsIp( const char* server ){
  */
 void getArguments( int argc, char** argv ){
     int arg;
-    // TODO: test -p -f file treba
+
     while( ( arg = getopt( argc, argv, "s:p:f:" ) ) != -1 ){
         switch( arg ){
             case 's':
@@ -79,29 +93,36 @@ void getArguments( int argc, char** argv ){
                 server = getDnsIp( server.c_str() );
                 break;
             case 'p':
+                if( !isNumber( optarg ) ){
+                    fprintf( stderr, "Port must be an integer in range of 1024 to 65535\n" );
+                    exit( 10 );    
+                }
                 port = atoi( optarg );
+                /* if( port < 1024 || port > 65535 ){
+                    fprintf( stderr, "Port must be an integer in range of 1024 to 65535\n" );
+                    exit( 10 );
+                } */
                 break;
             case 'f':
                 file = optarg;
                 break;
             default:
-                // TODO: OSETRENI
-                cout << arg;
+                fprintf( stderr, "Uknown argument\n" );
                 exit( 10 );
         }
     }
 
     if( server == "" ){
-        cout << "CHYBA";
-        exit( 11 );
+        fprintf( stderr, "Server argument must be passed\n" );
+        exit( 10 );
     } else if ( file == "" ){
-        cout << "CHYBA";
-        exit( 11 );
+        fprintf( stderr, "File with blacklisted domain names must be passed\n" );
+        exit( 10 );
     }
 
 }
 
-/*
+/**
  * @brief Splits a string by a char
  * @param s string
  * @param c splitter
@@ -127,14 +148,13 @@ const vector<string> explode( const string& s, const char& c ){
 	return v;
 }
 
-/*
+/**
  * @brief Searches given file for domain or subdomain
  * @param addr web addres
  * @return true or false when addr is located on the blacklist
  */
 int searchFile( string addr ){
     
-    // TODO: not existing file
     vector<string> domain = explode( addr, '.' );
 
     ifstream infile( file );
@@ -172,7 +192,7 @@ int searchFile( string addr ){
 
 }
 
-/*
+/**
  * @brief Send DNS response to client with rcode and qr set acording to error
  * @param socketfd communication socket
  * @param pd DNS packet structure
@@ -180,7 +200,7 @@ int searchFile( string addr ){
  * @param size packet size
  * @param cliaddr address structure
  * @param rcode error code
- * @param qr error flag
+ * @param qr response or query flag
  */
 void sendDnsError( int socketfd, dnshdr* pd, char* buffer, int size, sockaddr_in cliaddr, int rcode, int qr ){
     
@@ -194,7 +214,7 @@ void sendDnsError( int socketfd, dnshdr* pd, char* buffer, int size, sockaddr_in
 
 }
 
-/*
+/**
  * @brief DNS server
  * @param -p port number ( optional )
  * @param -s IP adress or domain name of DNS server
@@ -205,16 +225,13 @@ int main( int argc, char **argv ){
     
     getArguments( argc, argv );
 
-    int socketfd, new_socket, fread;
+    int socketfd;
     struct sockaddr_in my_addr, cliaddr, test;
-    int opt = 1;
-    int addrlen = sizeof( my_addr );
     char buffer[ 1024 ] = {0};
 
-    // TODO: zkontrolovat podminku
     if( ( socketfd = socket( AF_INET, SOCK_DGRAM, 0 ) ) < 0 ){
-        cout << "Error with socket creation";
-        exit( 10 );
+        fprintf( stderr, "Socket could not be created\n" );
+        exit( 12 );
     }
     
     memset( &my_addr, 0, sizeof( my_addr ) );
@@ -223,10 +240,9 @@ int main( int argc, char **argv ){
     my_addr.sin_addr.s_addr = INADDR_ANY;
     my_addr.sin_port = htons( port );
 
-
     if( bind( socketfd, ( struct sockaddr *) &my_addr, sizeof( my_addr ) ) < 0 ){
-        cout << "Bind error";
-        exit( errno );
+        fprintf( stderr, "Bind error\n" );
+        exit( 13 );
     }
     
     // main server cycle
@@ -237,6 +253,8 @@ int main( int argc, char **argv ){
 
         int clientpacket = recvfrom( socketfd, buffer, 1024, 0, ( struct sockaddr *) &cliaddr, ( socklen_t *) &len );
 
+        int recvlen = clientpacket;
+
         int pid;
         // child process
         if( ( pid = fork() ) == 0 ){
@@ -246,6 +264,7 @@ int main( int argc, char **argv ){
             // 13 is the byte right after header which says number of chars following
             int i = 13;
             int last = i;
+            bool format = false;
             string domain;
             // number of chars
             int length = buffer[ i - 1 ];
@@ -260,8 +279,13 @@ int main( int argc, char **argv ){
                 i++;
                 last = i;
                 if( length != 0 ){
+                    format = true;
                     domain = domain + '.';
                 }
+            }
+
+            if( format == false ){
+                sendDnsError( socketfd, pd, buffer, clientpacket, cliaddr, 1, 1 );
             }
 
             // transforming 8bit buffer into 16 bit for getting QTYPE
@@ -283,8 +307,6 @@ int main( int argc, char **argv ){
 
             clientpacket = clientpacket * 2;
 
-            int a = 0;
-
             if( searchFile( domain ) == 0 ){
                 sendDnsError( socketfd, pd, buffer, clientpacket, cliaddr, 5, 1 );
             } else {
@@ -293,8 +315,8 @@ int main( int argc, char **argv ){
 
                 // new socket for DNS server communication               
                 if( ( newsocket = socket( AF_INET, SOCK_DGRAM, 0 ) ) < 0 ){
-                    cout << "Error with socket creation";
-                    exit( 10 );
+                    fprintf( stderr, "Socket could not be created\n" );
+                    exit( 12 );
                 }
 
                 memset( &test, 0, sizeof( test ) );
@@ -303,10 +325,10 @@ int main( int argc, char **argv ){
                 test.sin_addr.s_addr = inet_addr( server.c_str() );
                 test.sin_port = htons( 53 );
 
-                // TODO: udp je 8 bajtu header, je to ok ?
-                sendto( newsocket, buffer, clientpacket + 8, 0, ( const struct sockaddr * ) &test, len );
+                sendto( newsocket, buffer, recvlen, 0, ( const struct sockaddr * ) &test, len );
                 
-                int toclient = recvfrom( newsocket, (char *)buffer, 1024, 0, ( struct sockaddr *) &test, ( socklen_t *) &test );
+                len = sizeof( test );
+                int toclient = recvfrom( newsocket, (char *)buffer, 1024, 0, ( struct sockaddr *) &test, ( socklen_t *) &len );
 
                 sendto( socketfd, buffer, toclient, 0, ( const struct sockaddr * ) &cliaddr, sizeof( cliaddr ) );
             }
