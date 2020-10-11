@@ -15,6 +15,7 @@
 
 // TODO: je treba neco delat s otevrenym socketem pri exit() ?
 // TODO: vadi kdyz zadany file s domenamy neexistuje ? 
+// FIXME: dig nebo nslookup malforme packet error
 
 #include "dns.h"
 
