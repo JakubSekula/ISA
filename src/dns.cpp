@@ -14,8 +14,6 @@
  */
 
 // TODO: je treba neco delat s otevrenym socketem pri exit() ?
-// TODO: vadi kdyz zadany file s domenamy neexistuje ? 
-// FIXME: dig nebo nslookup malforme packet error
 
 #include "dns.h"
 
@@ -79,6 +77,19 @@ bool isNumber( string s )
 }
 
 /**
+ * @brief Checks if given file exists
+ * @param file file
+ */
+void fileExists( char* file ){
+    string filepath = file;
+    ifstream ifile( filepath );
+    if( !ifile ){
+        fprintf( stderr, "File does not exists\n" );
+        exit( 9 );
+    }
+}
+
+/**
  * @brief Loads command line arguments
  * @param -p port number ( optional )
  * @param -s IP adress or domain name of DNS server
@@ -105,6 +116,7 @@ void getArguments( int argc, char** argv ){
                 } */
                 break;
             case 'f':
+                fileExists( optarg );
                 file = optarg;
                 break;
             default:
@@ -250,9 +262,10 @@ int main( int argc, char **argv ){
     while( 1 ){
 
         memset( &cliaddr, 0, sizeof( cliaddr ) );
-        int len = sizeof( cliaddr );
+        //int len = sizeof( cliaddr );
+        socklen_t clientaddrlen = sizeof(cliaddr);
 
-        int clientpacket = recvfrom( socketfd, buffer, 1024, 0, ( struct sockaddr *) &cliaddr, ( socklen_t *) &len );
+        int clientpacket = recvfrom( socketfd, buffer, 1024, 0, ( struct sockaddr *) &cliaddr, &clientaddrlen );
 
         int recvlen = clientpacket;
 
@@ -326,10 +339,11 @@ int main( int argc, char **argv ){
                 test.sin_addr.s_addr = inet_addr( server.c_str() );
                 test.sin_port = htons( 53 );
 
-                sendto( newsocket, buffer, recvlen, 0, ( const struct sockaddr * ) &test, len );
+                sendto( newsocket, buffer, recvlen, 0, ( const struct sockaddr * ) &test, sizeof( test ) );
                 
-                len = sizeof( test );
-                int toclient = recvfrom( newsocket, (char *)buffer, 1024, 0, ( struct sockaddr *) &test, ( socklen_t *) &len );
+                //len = sizeof( test );
+                socklen_t testaddrlen = sizeof(test);
+                int toclient = recvfrom( newsocket, (char *)buffer, 1024, 0, ( struct sockaddr *) &test, &testaddrlen );
 
                 sendto( socketfd, buffer, toclient, 0, ( const struct sockaddr * ) &cliaddr, sizeof( cliaddr ) );
             }
