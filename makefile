@@ -6,3 +6,5 @@ docu:
 	@doxygen
 clean:
 	@rm $(proj)
+test:
+	python3 test.py

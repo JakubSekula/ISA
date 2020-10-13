@@ -251,6 +251,10 @@ int main( int argc, char **argv ){
     my_addr.sin_addr.s_addr = INADDR_ANY;
     my_addr.sin_port = htons( port );
 
+
+    //const int opt = 1;
+    //setsockopt( SO_REUSEADDR, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof( opt ) );
+
     if( bind( socketfd, ( struct sockaddr *) &my_addr, sizeof( my_addr ) ) < 0 ){
         fprintf( stderr, "Bind error\n" );
         exit( 13 );

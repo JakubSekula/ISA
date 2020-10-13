@@ -3,10 +3,58 @@
 import os
 import re
 import subprocess
+import signal
+import random
 
 BLACKLIST = dict()
 DOMAINS = dict()
 RUNS = ""
+
+def searchFile( domain ):
+    
+    for parsedLine in BLACKLIST[ 1 ]:
+        parsedLine = parsedLine.split( '.' )
+
+        if( parsedLine[ 0 ] == '#' or parsedLine in [ '\n', '\r\n' ] ):
+            ...
+        else:
+            domain = domain.split( '.' )
+        if( len( domain ) < len( parsedLine ) ):
+            continue
+        else:
+            i = len( domain ) - 1
+            p = len( parsedLine ) - 1
+            while( p >= 0 ):
+                if( domain[ i ] == parsedLine[ p ] ):
+                    i -= 1
+                    p -= 1
+                    if( p < 0 ):
+                        return "FAIL"
+                else:
+                    break
+    return "OK"
+
+def searchOut( out, domain ):
+    out = out.decode( "utf8" )
+
+    expected = searchFile( domain )
+
+    if( re.search( 'authoritative', out ) ):
+        return "OK " + expected
+    else:
+        return "FAIL " + expected
+    return
+
+def lineList( file ):
+    domains = []
+    
+    for line in fileThis:
+        if( line[ -1 ] == '\n' ):
+            line = line[ :-1 ]
+            domains.append( line )
+        else:
+            domains.append( line )
+    return domains
 
 def executeThem():
     global RUNS
@@ -17,35 +65,38 @@ def executeThem():
         os.system( line )
     os.system( "" )
 
-for file in os.listdir( "tests/" ):
-    if( file.startswith( "executio" ) ):
-        RUNS = file
+listdir = os.listdir( "tests/" )
+
+for file in listdir:
+    if( re.search( "^executio", file ) ):
+        fileThis = open( "tests/" + file, 'r' )
+        RUNS = lineList( fileThis )
     else:
-        number = file[ -1 ]
-        file = file[ :-1 ]
-        if( file.startswith( "blackli" ) ):
-            BLACKLIST[ number ] = file
-        elif( file.startswith( "domai" ) ):
-            DOMAINS[ number ] = file
+        number = file[ -1 ] 
+        if( re.search( "^blackl", file ) ):
+            fileThis = open( "tests/" + file, 'r' )
+            BLACKLIST[ 1 ] = lineList( fileThis )
+        elif( re.search( "^doma", file ) ):
+            fileThis = open( "tests/" + file, 'r' )
+            DOMAINS[ int( number ) ] = lineList( fileThis )
         else:
             ...
 
-#executeThem()
-
-p = subprocess.Popen(["nslookup -port=8080 -type=a google.com localhost"], stdout=subprocess.PIPE, shell=True)
-port = 1025
+port = random.randint( 1024, 65535 )
 if( not os.path.isfile( "dns" ) ):
     os.system( "make" )
 else:
-    while( port < 65535 ):
-        try: 
-            proc = subprocess.Popen( ["./dns -s 1.1.1.1 -p 8081 -f domains" ], shell=True)
-            break
-        except:
-            port = port + 1
+    proc = subprocess.Popen( [ "./dns -s 1.1.1.1 -p " + str( port ) + " -f tests/blacklist" ], shell=True )
 
-out, err = p.communicate()
+for domains in DOMAINS:
+    print( "test" + str( domains ) + ": " )
+    for domain in DOMAINS[ domains ]:
+        pro = subprocess.Popen( [ "nslookup -port=" + str( port ) + " -type=a " + domain + " localhost" ], stdout=subprocess.PIPE, shell=True )
+        out, err = pro.communicate()
+        result = searchOut( out, domain )
+        print( "   " + domain, result )
+        pro.terminate()
 
-proc.terminate()
+os.killpg( os.getpgid( proc.pid ), signal.SIGTERM )
 
-print( out )
+exit( 0 )
