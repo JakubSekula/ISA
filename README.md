@@ -9,7 +9,7 @@ Program DNS is a server thats receives dns packet with dns question, then id che
 for example: 
 <br/>./dns -s 1.1.1.1 -p 8080 -f domains
 <br/>./dns -s 8.8.4.4 -p 2000 -f file.txt
-<br/>./dns -s server_name -p 8080 -f domains
+<br/>./dns -s server_name -f domains
 
 
 ### Files included

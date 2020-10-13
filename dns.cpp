@@ -13,8 +13,6 @@
  * @brief DNS server
  */
 
-// TODO: je treba neco delat s otevrenym socketem pri exit() ?
-
 #include "dns.h"
 
 using namespace std;
@@ -110,10 +108,10 @@ void getArguments( int argc, char** argv ){
                     exit( 10 );    
                 }
                 port = atoi( optarg );
-                /* if( port < 1024 || port > 65535 ){
+                if( port < 1024 || port > 65535 ){
                     fprintf( stderr, "Port must be an integer in range of 1024 to 65535\n" );
                     exit( 10 );
-                } */
+                }
                 break;
             case 'f':
                 fileExists( optarg );
@@ -338,7 +336,7 @@ int main( int argc, char **argv ){
                 test.sin_family = AF_INET;
                 test.sin_addr.s_addr = inet_addr( server.c_str() );
                 test.sin_port = htons( 53 );
-
+                
                 sendto( newsocket, buffer, recvlen, 0, ( const struct sockaddr * ) &test, sizeof( test ) );
                 
                 //len = sizeof( test );
