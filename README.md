@@ -19,3 +19,4 @@ for example:
 * makefile
 * README.md
 * manual.pdf
+* test.py
