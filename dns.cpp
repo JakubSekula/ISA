@@ -139,24 +139,22 @@ void getArguments( int argc, char** argv ){
  * @param c splitter
  * @return divided string as vector
  */
-const vector<string> explode( const string& s, const char& c ){
+vector<string> explode( string Elem, char find ){
 	
-    string buff{""};
-	vector<string> v;
-	
-	for( auto n:s ){
-		if( n != c ){
-            buff += n;
-        } else if( n == c && buff != "" ){
-            v.push_back( buff ); 
-            buff = ""; 
+	vector<string> exploded;
+	string temp = "";
+
+    for( char c : Elem ){
+        if( c == find ){
+            exploded.push_back( temp );
+            temp = "";
+        } else {
+            temp = temp + c;
         }
-	}
-	if( buff != "" ){
-        v.push_back( buff );
     }
 
-	return v;
+    return exploded;
+
 }
 
 /**
@@ -299,7 +297,7 @@ int main( int argc, char **argv ){
                     domain = domain + '.';
                 }
             }
-
+            // TODO: je to chyba ?
             if( format == false ){
                 sendDnsError( socketfd, pd, buffer, clientpacket, cliaddr, 1, 1 );
             }
@@ -307,13 +305,17 @@ int main( int argc, char **argv ){
             // transforming 8bit buffer into 16 bit for getting QTYPE
             uint16_t* bufferfield = (uint16_t*) buffer;
 
+            if( ( i % 2 ) != 0 ){
+                // in case of wrong packet size
+                bufferfield = (uint16_t*)( ( (char*) bufferfield ) + 1 );
+            }
+
             // 8bits -> 16 bits
             clientpacket = clientpacket / 2;
 
             int idx = i / 2;
-            uint16_t type = bufferfield[ idx ];
+            uint16_t type = bufferfield[ idx + 1 ];
 
-            cout << ntohs( type ) << "\n";
 
             if( ntohs( type ) != 1 ){
                 sendDnsError( socketfd, pd, buffer, clientpacket, cliaddr, 4, 1 );
