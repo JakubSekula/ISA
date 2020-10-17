@@ -306,16 +306,14 @@ int main( int argc, char **argv ){
 
             // transforming 8bit buffer into 16 bit for getting QTYPE
             uint16_t* bufferfield = (uint16_t*) buffer;
-            
-            if( clientpacket % 2 != 0 ){
-                // in case of wrong packet size
-                bufferfield = (uint16_t*)( ( (char*) bufferfield ) + 1 );
-            }
 
             // 8bits -> 16 bits
             clientpacket = clientpacket / 2;
 
-            uint16_t type = bufferfield[ clientpacket - 2 ];
+            int idx = i / 2;
+            uint16_t type = bufferfield[ idx ];
+
+            cout << ntohs( type ) << "\n";
 
             if( ntohs( type ) != 1 ){
                 sendDnsError( socketfd, pd, buffer, clientpacket, cliaddr, 4, 1 );
