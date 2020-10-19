@@ -6,6 +6,9 @@
  *			Jakub Sekula  (xsekul01) - xsekul01@stud.fit.vutbr.cz             *
  ******************************************************************************/
 
+// TODO: prepsat promenou test
+// TODO: -s dns.google zatim nefunguje
+
 /**
  * @file dns.cpp
  * @author Jakub Sekula( xsekul01 )
@@ -16,6 +19,11 @@
 #include "dns.h"
 
 using namespace std;
+
+/**
+ * IP version 
+ */
+int ver = 4;
 
 /**
  * Port number
@@ -37,17 +45,21 @@ string server = "";
  * @param server ip or server name
  * @return resolved ip
  */
-string getDnsIp( const char* server ){
+string getDnsIp( const char* server, int ver ){
     struct addrinfo hints, *res;
     memset( &hints, 0, sizeof ( hints ) );
 
-    hints.ai_family = AF_INET;
+    if( ver == 4 ){
+        hints.ai_family = AF_INET;
+    } else {
+        hints.ai_family = AF_INET6;
+    }
+
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_CANONNAME;
     
     if( getaddrinfo ( server, NULL, &hints, &res ) != 0 ){
-        fprintf( stderr, "Given servername or ip address by -s argument is not resolvable\n" );
-        exit( 11 );
+        return( "" );
     }
     
     void* ptr;
@@ -55,7 +67,11 @@ string getDnsIp( const char* server ){
     
     inet_ntop( res->ai_family, res->ai_addr->sa_data, (char*) addrstr.c_str(), 100 );
 
-    ptr = &( ( struct sockaddr_in * ) res->ai_addr )->sin_addr;
+    if( ver == 4 ){
+        ptr = &( ( struct sockaddr_in *) res->ai_addr )->sin_addr;
+    } else {
+        ptr = &( ( struct sockaddr_in6 *) res->ai_addr )->sin6_addr;
+    }
     inet_ntop (res->ai_family, ptr, (char*) addrstr.c_str(), 100);
     return addrstr.c_str();
 }
@@ -95,12 +111,27 @@ void fileExists( char* file ){
  */
 void getArguments( int argc, char** argv ){
     int arg;
-
+    string temp = "";
     while( ( arg = getopt( argc, argv, "s:p:f:" ) ) != -1 ){
         switch( arg ){
             case 's':
                 server = optarg;
-                server = getDnsIp( server.c_str() );
+                temp = getDnsIp( server.c_str(), 4 );
+                if( temp != "" ){
+                    ver = 4;
+                    server = temp;
+                    break;
+                }
+                temp = getDnsIp( server.c_str(), 6 );
+                if( temp != "" ){
+                    ver = 6;
+                    server = temp;
+                    break;
+                }
+                
+                fprintf( stderr, "Value given by -s parameter could not be converted to ip address\n" );
+                exit( 10 );
+                
                 break;
             case 'p':
                 if( !isNumber( optarg ) ){
@@ -207,16 +238,16 @@ int searchFile( string addr ){
  * @param pd DNS packet structure
  * @param buffer packet
  * @param size packet size
- * @param cliaddr address structure
+ * @param cliaddr4 address structure
  * @param rcode error code
  * @param qr response or query flag
  */
-void sendDnsError( int socketfd, dnshdr* pd, char* buffer, int size, sockaddr_in cliaddr, int rcode, int qr ){
+void sendDnsError( int socketfd, dnshdr* pd, char* buffer, int size, sockaddr_in cliaddr4, int rcode, int qr ){
     
     pd->rcode = rcode;
     pd->qr = qr;
                 
-    sendto( socketfd, buffer, size, 0, ( const struct sockaddr * ) &cliaddr, sizeof( cliaddr ) );
+    sendto( socketfd, buffer, size, 0, ( const struct sockaddr * ) &cliaddr4, sizeof( cliaddr4 ) );
 
     close( socketfd );
     exit( 0 );
@@ -235,41 +266,70 @@ int main( int argc, char **argv ){
     getArguments( argc, argv );
 
     int socketfd;
-    struct sockaddr_in my_addr, cliaddr, test;
+    struct sockaddr_in my_addr4, cliaddr4, dns4;
+    struct sockaddr_in6 my_addr6, cliaddr6, dns6;
     char buffer[ 1024 ] = {0};
 
-    if( ( socketfd = socket( AF_INET, SOCK_DGRAM, 0 ) ) < 0 ){
+    if( ver == 4 ){
+        socketfd = socket( AF_INET, SOCK_DGRAM, 0 );
+    } else {
+        socketfd = socket( AF_INET6, SOCK_DGRAM, 0 );
+    }
+
+    if( ( socketfd ) < 0 ){
         fprintf( stderr, "Socket could not be created\n" );
         exit( 12 );
     }
     
-    memset( &my_addr, 0, sizeof( my_addr ) );
-        
-    my_addr.sin_family = AF_INET;
-    my_addr.sin_addr.s_addr = INADDR_ANY;
-    my_addr.sin_port = htons( port );
+    if( ver == 4 ){
+        memset( &my_addr4, 0, sizeof( my_addr4 ) );
+        my_addr4.sin_family = AF_INET;
+        my_addr4.sin_addr.s_addr = INADDR_ANY;
+        my_addr4.sin_port = htons( port );
+    } else {
+        memset( &my_addr6, 0, sizeof( my_addr6 ) );
+        my_addr6.sin6_family = AF_INET6;
+        my_addr6.sin6_addr = IN6ADDR_ANY_INIT;
+        my_addr6.sin6_port = htons( port );
+    }
 
+    int bindVal;
 
-    //const int opt = 1;
-    //setsockopt( SO_REUSEADDR, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof( opt ) );
+    if( ver == 4 ){
+        bindVal =  bind( socketfd, ( struct sockaddr *) &my_addr4, sizeof( my_addr4 ) );
+    } else {
+        bindVal =  bind( socketfd, ( struct sockaddr *) &my_addr6, sizeof( my_addr6 ) );
+    }
 
-    if( bind( socketfd, ( struct sockaddr *) &my_addr, sizeof( my_addr ) ) < 0 ){
+    if( bindVal < 0 ){
         fprintf( stderr, "Bind error\n" );
         exit( 13 );
     }
-    
+
     // main server cycle
     while( 1 ){
 
-        memset( &cliaddr, 0, sizeof( cliaddr ) );
-        //int len = sizeof( cliaddr );
-        socklen_t clientaddrlen = sizeof(cliaddr);
-
-        int clientpacket = recvfrom( socketfd, buffer, 1024, 0, ( struct sockaddr *) &cliaddr, &clientaddrlen );
-
+        socklen_t clientaddrlen;
+        if( ver == 4 ){
+            memset( &cliaddr4, 0, sizeof( cliaddr4 ) );
+            //int len = sizeof( cliaddr4 );
+            clientaddrlen = sizeof( cliaddr4 );
+        } else {
+            memset( &cliaddr6, 0, sizeof( cliaddr6 ) );
+            clientaddrlen = sizeof( cliaddr6 );
+        }
+    
+        int clientpacket;
+        if( ver == 4 ){
+            clientpacket = recvfrom( socketfd, buffer, 1024, 0, ( struct sockaddr *) &cliaddr4, &clientaddrlen );
+        } else {
+            clientpacket = recvfrom( socketfd, buffer, 1024, 0, ( struct sockaddr *) &cliaddr6, &clientaddrlen );
+        }
+        
         int recvlen = clientpacket;
 
         int pid;
+
         // child process
         if( ( pid = fork() ) == 0 ){
 
@@ -297,9 +357,10 @@ int main( int argc, char **argv ){
                     domain = domain + '.';
                 }
             }
+
             // TODO: je to chyba ?
             if( format == false ){
-                sendDnsError( socketfd, pd, buffer, clientpacket, cliaddr, 1, 1 );
+                sendDnsError( socketfd, pd, buffer, clientpacket, cliaddr4, 1, 1 );
             }
 
             // transforming 8bit buffer into 16 bit for getting QTYPE
@@ -318,36 +379,60 @@ int main( int argc, char **argv ){
 
 
             if( ntohs( type ) != 1 ){
-                sendDnsError( socketfd, pd, buffer, clientpacket, cliaddr, 4, 1 );
+                sendDnsError( socketfd, pd, buffer, clientpacket, cliaddr4, 4, 1 );
             }
 
             clientpacket = clientpacket * 2;
 
             if( searchFile( domain ) == 0 ){
-                sendDnsError( socketfd, pd, buffer, clientpacket, cliaddr, 5, 1 );
+                sendDnsError( socketfd, pd, buffer, clientpacket, cliaddr4, 5, 1 );
             } else {
 
                 int newsocket;
+                if( ver == 4 ){
+                    newsocket = socket( AF_INET, SOCK_DGRAM, 0 );
+                } else {
+                    newsocket = socket( AF_INET6, SOCK_DGRAM, 0 );
+                }
 
                 // new socket for DNS server communication               
-                if( ( newsocket = socket( AF_INET, SOCK_DGRAM, 0 ) ) < 0 ){
+                if( newsocket < 0 ){
                     fprintf( stderr, "Socket could not be created\n" );
                     exit( 12 );
                 }
 
-                memset( &test, 0, sizeof( test ) );
+                if( ver == 4 ){
+                    memset( &dns4, 0, sizeof( dns4 ) );
+                    dns4.sin_family = AF_INET;
+                    dns4.sin_addr.s_addr = inet_addr( server.c_str() );
+                    dns4.sin_port = htons( 53 );
+                    sendto( newsocket, buffer, recvlen, 0, ( const struct sockaddr * ) &dns4, sizeof( dns4 ) );
+                } else {
+                    unsigned char buf[ sizeof( struct in6_addr ) ];
+                    memset( &dns6, 0, sizeof( dns6 ) );
+                    dns6.sin6_family = AF_INET6;
 
-                test.sin_family = AF_INET;
-                test.sin_addr.s_addr = inet_addr( server.c_str() );
-                test.sin_port = htons( 53 );
-                
-                sendto( newsocket, buffer, recvlen, 0, ( const struct sockaddr * ) &test, sizeof( test ) );
-                
-                //len = sizeof( test );
-                socklen_t testaddrlen = sizeof(test);
-                int toclient = recvfrom( newsocket, (char *)buffer, 1024, 0, ( struct sockaddr *) &test, &testaddrlen );
+                    inet_pton( AF_INET6, server.c_str(), buf );
+                    memcpy( &dns6.sin6_addr, buf, sizeof( struct in6_addr ) );
 
-                sendto( socketfd, buffer, toclient, 0, ( const struct sockaddr * ) &cliaddr, sizeof( cliaddr ) );
+                    dns6.sin6_port = htons( 53 );
+                    sendto( newsocket, buffer, recvlen, 0, ( const struct sockaddr * ) &dns6, sizeof( dns6 ) );
+                }
+
+                
+                socklen_t testaddrlen;
+                int toclient;
+                
+                if( ver == 4 ){
+                    testaddrlen = sizeof( dns4 );
+                    toclient = recvfrom( newsocket, (char *)buffer, 1024, 0, ( struct sockaddr *) &dns4, &testaddrlen );
+                    sendto( socketfd, buffer, toclient, 0, ( const struct sockaddr * ) &cliaddr4, sizeof( cliaddr4 ) );
+                } else {
+                    testaddrlen = sizeof( dns6 );
+                    toclient = recvfrom( newsocket, (char *)buffer, 1024, 0, ( struct sockaddr *) &dns6, &testaddrlen );
+                    sendto( socketfd, buffer, toclient, 0, ( const struct sockaddr * ) &cliaddr6, sizeof( cliaddr6 ) );
+                }
+
             }
 
             close( socketfd );
