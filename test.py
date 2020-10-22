@@ -2,6 +2,7 @@
 
 import os
 import re
+import time
 import subprocess
 import signal
 import random
@@ -11,7 +12,7 @@ DOMAINS = dict()
 RUNS = ""
 
 def searchFile( domain ):
-    
+
     for parsedLine in BLACKLIST[ 1 ]:
         parsedLine = parsedLine.split( '.' )
 
@@ -36,9 +37,9 @@ def searchFile( domain ):
 
 def searchOut( out, domain ):
     out = out.decode( "utf8" )
-
+    
     expected = searchFile( domain )
-
+    
     if( re.search( 'authoritative', out ) ):
         return "OK " + expected
     else:
@@ -82,11 +83,11 @@ for file in listdir:
         else:
             ...
 
-port = random.randint( 1024, 65535 )
+port = 8080
 if( not os.path.isfile( "dns" ) ):
     os.system( "make" )
 else:
-    proc = subprocess.Popen( [ "./dns -s 1.1.1.1 -p " + str( port ) + " -f tests/blacklist" ], shell=True )
+    proc = subprocess.Popen( [ "./dns", "-s", "8.8.8.8", "-f", "tests/blacklist", "-p", "8080" ] )
 
 for domains in DOMAINS:
     print( "test" + str( domains ) + ": " )
@@ -95,8 +96,8 @@ for domains in DOMAINS:
         out, err = pro.communicate()
         result = searchOut( out, domain )
         print( "   " + domain, result )
-        pro.terminate()
-
-os.killpg( os.getpgid( proc.pid ), signal.SIGTERM )
+        pro.kill()        
+        
+proc.kill()
 
 exit( 0 )

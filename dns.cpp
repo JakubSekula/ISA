@@ -116,15 +116,15 @@ void getArguments( int argc, char** argv ){
         switch( arg ){
             case 's':
                 server = optarg;
-                temp = getDnsIp( server.c_str(), 4 );
-                if( temp != "" ){
-                    ver = 4;
-                    server = temp;
-                    break;
-                }
                 temp = getDnsIp( server.c_str(), 6 );
                 if( temp != "" ){
                     ver = 6;
+                    server = temp;
+                    break;
+                }
+                temp = getDnsIp( server.c_str(), 4 );
+                if( temp != "" ){
+                    ver = 4;
                     server = temp;
                     break;
                 }
@@ -184,6 +184,8 @@ vector<string> explode( string Elem, char find ){
         }
     }
 
+    exploded.push_back( temp );
+
     return exploded;
 
 }
@@ -238,16 +240,16 @@ int searchFile( string addr ){
  * @param pd DNS packet structure
  * @param buffer packet
  * @param size packet size
- * @param cliaddr4 address structure
+ * @param cliaddr6 address structure
  * @param rcode error code
  * @param qr response or query flag
  */
-void sendDnsError( int socketfd, dnshdr* pd, char* buffer, int size, sockaddr_in cliaddr4, int rcode, int qr ){
+void sendDnsError( int socketfd, dnshdr* pd, int size, sockaddr_in6 cliaddr6, int rcode, int qr ){
     
     pd->rcode = rcode;
     pd->qr = qr;
-                
-    sendto( socketfd, buffer, size, 0, ( const struct sockaddr * ) &cliaddr4, sizeof( cliaddr4 ) );
+    
+    sendto( socketfd, pd, size, 0, ( const struct sockaddr * ) &cliaddr6, sizeof( cliaddr6 ) );
 
     close( socketfd );
     exit( 0 );
@@ -266,40 +268,25 @@ int main( int argc, char **argv ){
     getArguments( argc, argv );
 
     int socketfd;
-    struct sockaddr_in my_addr4, cliaddr4, dns4;
+    struct sockaddr_in dns4;
     struct sockaddr_in6 my_addr6, cliaddr6, dns6;
     char buffer[ 1024 ] = {0};
 
-    if( ver == 4 ){
-        socketfd = socket( AF_INET, SOCK_DGRAM, 0 );
-    } else {
-        socketfd = socket( AF_INET6, SOCK_DGRAM, 0 );
-    }
+    socketfd = socket( AF_INET6, SOCK_DGRAM, 0 );
 
     if( ( socketfd ) < 0 ){
         fprintf( stderr, "Socket could not be created\n" );
         exit( 12 );
     }
     
-    if( ver == 4 ){
-        memset( &my_addr4, 0, sizeof( my_addr4 ) );
-        my_addr4.sin_family = AF_INET;
-        my_addr4.sin_addr.s_addr = INADDR_ANY;
-        my_addr4.sin_port = htons( port );
-    } else {
-        memset( &my_addr6, 0, sizeof( my_addr6 ) );
-        my_addr6.sin6_family = AF_INET6;
-        my_addr6.sin6_addr = IN6ADDR_ANY_INIT;
-        my_addr6.sin6_port = htons( port );
-    }
+    memset( &my_addr6, 0, sizeof( my_addr6 ) );
+    my_addr6.sin6_family = AF_INET6;
+    my_addr6.sin6_addr = IN6ADDR_ANY_INIT;
+    my_addr6.sin6_port = htons( port );
 
     int bindVal;
 
-    if( ver == 4 ){
-        bindVal =  bind( socketfd, ( struct sockaddr *) &my_addr4, sizeof( my_addr4 ) );
-    } else {
-        bindVal =  bind( socketfd, ( struct sockaddr *) &my_addr6, sizeof( my_addr6 ) );
-    }
+    bindVal =  bind( socketfd, ( struct sockaddr *) &my_addr6, sizeof( my_addr6 ) );
 
     if( bindVal < 0 ){
         fprintf( stderr, "Bind error\n" );
@@ -310,21 +297,12 @@ int main( int argc, char **argv ){
     while( 1 ){
 
         socklen_t clientaddrlen;
-        if( ver == 4 ){
-            memset( &cliaddr4, 0, sizeof( cliaddr4 ) );
-            //int len = sizeof( cliaddr4 );
-            clientaddrlen = sizeof( cliaddr4 );
-        } else {
-            memset( &cliaddr6, 0, sizeof( cliaddr6 ) );
-            clientaddrlen = sizeof( cliaddr6 );
-        }
+
+        memset( &cliaddr6, 0, sizeof( cliaddr6 ) );
+        clientaddrlen = sizeof( cliaddr6 );
     
         int clientpacket;
-        if( ver == 4 ){
-            clientpacket = recvfrom( socketfd, buffer, 1024, 0, ( struct sockaddr *) &cliaddr4, &clientaddrlen );
-        } else {
-            clientpacket = recvfrom( socketfd, buffer, 1024, 0, ( struct sockaddr *) &cliaddr6, &clientaddrlen );
-        }
+        clientpacket = recvfrom( socketfd, buffer, 1024, 0, ( struct sockaddr *) &cliaddr6, &clientaddrlen );   
         
         int recvlen = clientpacket;
 
@@ -360,7 +338,7 @@ int main( int argc, char **argv ){
 
             // TODO: je to chyba ?
             if( format == false ){
-                sendDnsError( socketfd, pd, buffer, clientpacket, cliaddr4, 1, 1 );
+                sendDnsError( socketfd, pd, recvlen, cliaddr6, 1, 1 );
             }
 
             // transforming 8bit buffer into 16 bit for getting QTYPE
@@ -379,13 +357,13 @@ int main( int argc, char **argv ){
 
 
             if( ntohs( type ) != 1 ){
-                sendDnsError( socketfd, pd, buffer, clientpacket, cliaddr4, 4, 1 );
+                sendDnsError( socketfd, pd, recvlen, cliaddr6, 4, 1 );
             }
 
             clientpacket = clientpacket * 2;
 
             if( searchFile( domain ) == 0 ){
-                sendDnsError( socketfd, pd, buffer, clientpacket, cliaddr4, 5, 1 );
+                sendDnsError( socketfd, pd, recvlen, cliaddr6, 5, 1 );
             } else {
 
                 int newsocket;
@@ -423,15 +401,9 @@ int main( int argc, char **argv ){
                 socklen_t testaddrlen;
                 int toclient;
                 
-                if( ver == 4 ){
-                    testaddrlen = sizeof( dns4 );
-                    toclient = recvfrom( newsocket, (char *)buffer, 1024, 0, ( struct sockaddr *) &dns4, &testaddrlen );
-                    sendto( socketfd, buffer, toclient, 0, ( const struct sockaddr * ) &cliaddr4, sizeof( cliaddr4 ) );
-                } else {
-                    testaddrlen = sizeof( dns6 );
-                    toclient = recvfrom( newsocket, (char *)buffer, 1024, 0, ( struct sockaddr *) &dns6, &testaddrlen );
-                    sendto( socketfd, buffer, toclient, 0, ( const struct sockaddr * ) &cliaddr6, sizeof( cliaddr6 ) );
-                }
+                testaddrlen = sizeof( dns6 );
+                toclient = recvfrom( newsocket, (char *)buffer, 1024, 0, ( struct sockaddr *) &dns6, &testaddrlen );
+                sendto( socketfd, buffer, toclient, 0, ( const struct sockaddr * ) &cliaddr6, sizeof( cliaddr6 ) );
 
             }
 
