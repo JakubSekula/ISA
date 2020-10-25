@@ -16,7 +16,8 @@
  * @brief DNS server
  */
 
-#include "dns.h"
+#include "dns.hpp"
+#include "ext/dnshdr.hpp"
 
 using namespace std;
 
@@ -264,6 +265,9 @@ void sendDnsError( int socketfd, dnshdr* pd, int size, sockaddr_in6 cliaddr6, in
  * @return 0 or int > 0 when error occurs
  */
 int main( int argc, char **argv ){
+
+    // Elimination of child processes
+    signal( SIGCHLD, SIG_IGN );
     
     getArguments( argc, argv );
 
@@ -394,6 +398,7 @@ int main( int argc, char **argv ){
                     memcpy( &dns6.sin6_addr, buf, sizeof( struct in6_addr ) );
 
                     dns6.sin6_port = htons( 53 );
+
                     sendto( newsocket, buffer, recvlen, 0, ( const struct sockaddr * ) &dns6, sizeof( dns6 ) );
                 }
 

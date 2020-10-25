@@ -1,6 +1,0 @@
-./dns
-./dns -p 8080
-./dns -f domains
-./dns -s 1.1.1.1
-./dns -f domains -s 1.1.1.1
-./dns -f domains -s 1.1.1.1 -p 8080

@@ -1,25 +1,52 @@
 #!/usr/bin/env python3
 
+###############################################################################
+ # Project: Filtrující DNS resolver                                           #
+ # Subject: ISA - Network Applications and Network Administration             #
+ # Rok:     2020/2021                                                         #
+ # Authors:                                                                   #
+ #			Jakub Sekula  (xsekul01) - xsekul01@stud.fit.vutbr.cz             #
+ ###############################################################################
+
+##
+ # @file test.py
+ # @author Jakub Sekula( xsekul01 )
+ # @date 10.10.2020
+ # @brief testovací skript
+ ##
+
 import os
 import re
+import sys
 import time
 import subprocess
 import signal
+import getopt
 import random
 
-BLACKLIST = dict()
-DOMAINS = dict()
-RUNS = ""
+# počet neúspěšných testů
+failed = 0
+# počet úspěšných testů
+succ = 0
 
+##
+ # Funkce prohledá soubor blacklist domén a jestliže je nalezena doména, která má být odfiltrovaná, tak se vrací FAIL, jinak OK
+ # @param domain doména
+ # @return "OK" při nenalezení domény
+ # @return "FAIL" při nalezení domény v souboru blacklist
+##
 def searchFile( domain ):
+    global blacklisted
 
-    for parsedLine in BLACKLIST[ 1 ]:
-        parsedLine = parsedLine.split( '.' )
+    domain = domain.split( '.' )
 
-        if( parsedLine[ 0 ] == '#' or parsedLine in [ '\n', '\r\n' ] ):
-            ...
+    for parsedLine in blacklisted:
+        if( parsedLine in [ '\n', '\r\n' ] ):
+            continue
         else:
-            domain = domain.split( '.' )
+            parsedLine = parsedLine.split( '.' )
+            if( parsedLine[ 0 ] == '#' ):
+                continue
         if( len( domain ) < len( parsedLine ) ):
             continue
         else:
@@ -35,17 +62,39 @@ def searchFile( domain ):
                     break
     return "OK"
 
+##
+ # Funkce prohledá výstup subprocesu, z kterého pouštím dotazy na server, jestliže v out authoritative tak byla navrácena alespoň 1 ip
+ # @param out výstup
+ # @param domain doména
+ # @return "OK" při úspěchu
+ # @return "FAIL" při neúspěchu
+##
 def searchOut( out, domain ):
+    global failed
+    global succ
     out = out.decode( "utf8" )
     
     expected = searchFile( domain )
     
     if( re.search( 'authoritative', out ) ):
+        if( expected == "OK" ):
+            succ += 1
+        else:
+            failed += 1
         return "OK " + expected
     else:
+        if( expected == "FAIL" ):
+            succ += 1
+        else:
+            failed += 1
         return "FAIL " + expected
     return
 
+##
+ # odstranění znaku nového řádku na konci stringu
+ # @param file path ke složce
+ # @return seznam domén
+##
 def lineList( file ):
     domains = []
     
@@ -57,47 +106,49 @@ def lineList( file ):
             domains.append( line )
     return domains
 
-def executeThem():
-    global RUNS
-    file1 = open( 'tests/' + RUNS, 'r' )
-    Lines = file1.readlines()
+if( len( sys.argv ) != 5 ):
+    print( "Run scripts as: test.py [port] [domains file] [blacklisted domains] [DNS resolver]" )
+    exit( 0 )
 
-    for line in Lines:
-        os.system( line )
-    os.system( "" )
+## získávání parametrů
+port = sys.argv[ 1 ]
+DomainsFile = sys.argv[ 2 ]
+BlacklistDomains = sys.argv[ 3 ]
 
-listdir = os.listdir( "tests/" )
+fileThis = open( DomainsFile, 'r' )
+DOMAINS = lineList( fileThis )
 
-for file in listdir:
-    if( re.search( "^executio", file ) ):
-        fileThis = open( "tests/" + file, 'r' )
-        RUNS = lineList( fileThis )
-    else:
-        number = file[ -1 ] 
-        if( re.search( "^blackl", file ) ):
-            fileThis = open( "tests/" + file, 'r' )
-            BLACKLIST[ 1 ] = lineList( fileThis )
-        elif( re.search( "^doma", file ) ):
-            fileThis = open( "tests/" + file, 'r' )
-            DOMAINS[ int( number ) ] = lineList( fileThis )
-        else:
-            ...
+fileThis = open( BlacklistDomains, 'r' )
+blacklisted = lineList( fileThis )
 
-port = 8080
+DNS = sys.argv[ 4 ]
+
+command = "./dns -s " + DNS +" -f tests/blacklist -p " + port
+
+## jestliže není binárka dns ve složce, tak spustím příkaz make
 if( not os.path.isfile( "dns" ) ):
-    os.system( "make" )
+    print( "Soubor dns nenalezen" )
+    exit( 0 )
 else:
-    proc = subprocess.Popen( [ "./dns", "-s", "8.8.8.8", "-f", "tests/blacklist", "-p", "8080" ] )
+    proc = subprocess.Popen( [ "./dns", "-s", DNS, "-f", "tests/blacklist", "-p", port ] )
 
-for domains in DOMAINS:
-    print( "test" + str( domains ) + ": " )
-    for domain in DOMAINS[ domains ]:
-        pro = subprocess.Popen( [ "nslookup -port=" + str( port ) + " -type=a " + domain + " localhost" ], stdout=subprocess.PIPE, shell=True )
-        out, err = pro.communicate()
-        result = searchOut( out, domain )
-        print( "   " + domain, result )
-        pro.kill()        
+print( "Running tests: " )
+for domain in DOMAINS:
+    pro = subprocess.Popen( [ "nslookup", "-port=" + str( port ), "-type=a", domain, "localhost" ], stdout=subprocess.PIPE )
+    ## výstup ze subprocessu
+    out, err = pro.communicate()
+    result = searchOut( out, domain )
+    print( "   " + domain, result )
+    ## ukončím process
+    pro.send_signal( signal.SIGTERM )       
+
+print( "-------------------------" )
         
-proc.kill()
+print( "Succesful: " + str( succ ) )
+print( "Failed: " + str( failed ) )
+
+## ukončím process
+proc.send_signal( signal.SIGTERM )  
+
 
 exit( 0 )
