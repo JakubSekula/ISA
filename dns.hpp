@@ -10,7 +10,7 @@
  * @file dns.h
  * @author Jakub Sekula( xsekul01 )
  * @date 10.10.2020
- * @brief Packet structure
+ * @brief Includes
  */
 
 #include <iostream>

@@ -349,6 +349,8 @@ int main( int argc, char **argv ){
             uint16_t* bufferfield = (uint16_t*) buffer;
 
             if( ( i % 2 ) != 0 ){
+                // kvuli deleni 2
+                i--;
                 // in case of wrong packet size
                 bufferfield = (uint16_t*)( ( (char*) bufferfield ) + 1 );
             }
@@ -357,8 +359,7 @@ int main( int argc, char **argv ){
             clientpacket = clientpacket / 2;
 
             int idx = i / 2;
-            uint16_t type = bufferfield[ idx + 1 ];
-
+            uint16_t type = bufferfield[ idx ];
 
             if( ntohs( type ) != 1 ){
                 sendDnsError( socketfd, pd, recvlen, cliaddr6, 4, 1 );
