@@ -140,7 +140,7 @@ for domain in DOMAINS:
     result = searchOut( out, domain )
     print( "   " + domain, result )
     ## ukončím process
-    pro.send_signal( signal.SIGTERM )       
+    pro.send_signal( signal.SIGTERM )   
 
 print( "-------------------------" )
         

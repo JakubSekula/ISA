@@ -21,6 +21,8 @@
 
 using namespace std;
 
+struct sockaddr* staddr;
+
 /**
  * IP version 
  */
@@ -66,6 +68,8 @@ string getDnsIp( const char* server, int ver ){
     void* ptr;
     string addrstr;
     
+    staddr = res->ai_addr;
+
     inet_ntop( res->ai_family, res->ai_addr->sa_data, (char*) addrstr.c_str(), 100 );
 
     if( ver == 4 ){
@@ -113,7 +117,7 @@ void fileExists( char* file ){
 void getArguments( int argc, char** argv ){
     int arg;
     string temp = "";
-    while( ( arg = getopt( argc, argv, "s:p:f:" ) ) != -1 ){
+    while( ( arg = getopt( argc, argv, "s:p:f:h" ) ) != -1 ){
         switch( arg ){
             case 's':
                 server = optarg;
@@ -136,18 +140,22 @@ void getArguments( int argc, char** argv ){
                 break;
             case 'p':
                 if( !isNumber( optarg ) ){
-                    fprintf( stderr, "Port must be an integer in range of 1024 to 65535\n" );
+                    fprintf( stderr, "Port must be an integer in range of 0 to 65535\n" );
                     exit( 10 );    
                 }
                 port = atoi( optarg );
-                if( port < 1024 || port > 65535 ){
-                    fprintf( stderr, "Port must be an integer in range of 1024 to 65535\n" );
+                if( port < 0 || port > 65535 ){
+                    fprintf( stderr, "Port must be an integer in range of 0 to 65535\n" );
                     exit( 10 );
                 }
                 break;
             case 'f':
                 fileExists( optarg );
                 file = optarg;
+                break;
+            case 'h':
+                printf( "Program should be run as: ./dns -p port_number -f file_with_blacklisted_domains -s dns_resolver_ip_or_name \n" );
+                exit( 0 );
                 break;
             default:
                 fprintf( stderr, "Uknown argument\n" );
@@ -250,7 +258,7 @@ void sendDnsError( int socketfd, dnshdr* pd, int size, sockaddr_in6 cliaddr6, in
     pd->rcode = rcode;
     pd->qr = qr;
     
-    sendto( socketfd, pd, size, 0, ( const struct sockaddr * ) &cliaddr6, sizeof( cliaddr6 ) );
+    sendto( socketfd, pd, size, 0, ( const struct sockaddr * ) &cliaddr6, ( socklen_t ) sizeof( cliaddr6 ) );
 
     close( socketfd );
     exit( 0 );
@@ -409,7 +417,7 @@ int main( int argc, char **argv ){
                 
                 testaddrlen = sizeof( dns6 );
                 toclient = recvfrom( newsocket, (char *)buffer, 1024, 0, ( struct sockaddr *) &dns6, &testaddrlen );
-                sendto( socketfd, buffer, toclient, 0, ( const struct sockaddr * ) &cliaddr6, sizeof( cliaddr6 ) );
+                sendto( socketfd, buffer, toclient, 0, ( const struct sockaddr * ) &cliaddr6, ( socklen_t ) sizeof( cliaddr6 ) );
 
             }
 
