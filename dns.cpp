@@ -18,6 +18,7 @@
 
 #include "dns.hpp"
 #include "ext/dnshdr.hpp"
+#include <ctype.h>
 
 using namespace std;
 
@@ -99,13 +100,20 @@ bool isNumber( string s )
  * @brief Checks if given file exists
  * @param file file
  */
-void fileExists( char* file ){
-    string filepath = file;
-    ifstream ifile( filepath );
-    if( !ifile ){
-        fprintf( stderr, "File does not exists\n" );
-        exit( 9 );
+void fileExists( char* fileblack ){
+    
+    struct stat s;
+
+    if( stat( fileblack, &s ) == 0 ){
+        if( s.st_mode & S_IFREG ){
+            return;
+        }
     }
+
+    // chyba
+    fprintf( stderr, "File does not exists\n" );
+    exit( 9 );
+
 }
 
 /**
@@ -200,12 +208,32 @@ vector<string> explode( string Elem, char find ){
 }
 
 /**
+ * @brief Converts chars to lowercase
+ * @param addr web addres
+ * @return converted string
+ */
+string ConvertLower( string addr ){
+    string lower;
+
+    char ascii;
+
+    for( auto ch : addr ){
+        ascii = ::tolower( ch );
+        lower = lower + ascii;
+    }
+    
+    return lower.c_str();
+}
+
+/**
  * @brief Searches given file for domain or subdomain
  * @param addr web addres
  * @return true or false when addr is located on the blacklist
  */
 int searchFile( string addr ){
-    
+
+    addr = ConvertLower( addr );
+
     vector<string> domain = explode( addr, '.' );
 
     ifstream infile( file );
@@ -215,6 +243,12 @@ int searchFile( string addr ){
         if( line[ 0 ] == '#' || line.empty() ){
             // skip line
         } else {
+
+            // odmazani whitespace ze stringu
+            line.erase( remove_if( line.begin(), line.end(), ::isspace ), line.end() );
+
+            line = ConvertLower( line );
+
             // parse line
             vector<string> parsedLine = explode( line, '.' );
 

@@ -20,6 +20,8 @@
 #include <unistd.h>
 #include <csignal>
 #include <string.h>
+#include <sys/stat.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <boost/algorithm/string.hpp>

@@ -44,6 +44,7 @@ def searchFile( domain ):
         if( parsedLine in [ '\n', '\r\n' ] ):
             continue
         else:
+            parsedLine = parsedLine.strip()
             parsedLine = parsedLine.split( '.' )
             if( parsedLine[ 0 ] == '#' ):
                 continue
