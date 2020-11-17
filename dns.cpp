@@ -426,6 +426,23 @@ int main( int argc, char **argv ){
                     exit( 12 );
                 }
 
+                int reuse = 1;
+                if( setsockopt( newsocket, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof( reuse ) ) < 0 ){
+                    fprintf( stderr, "Socket REUSE options failed \n" );
+                    perror( "ERROR: " );
+                    exit( 12 );
+                }
+
+                struct timeval tv;
+
+                tv.tv_sec = 4;
+                tv.tv_usec = 0;
+
+                if( setsockopt( newsocket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof( tv ) ) < 0 ){
+                    fprintf( stderr, "Socket options failed \n" );
+                    exit( 12 );
+                }
+
                 if( ver == 4 ){
                     memset( &dns4, 0, sizeof( dns4 ) );
                     dns4.sin_family = AF_INET;
@@ -450,7 +467,11 @@ int main( int argc, char **argv ){
                 int toclient;
                 
                 testaddrlen = sizeof( dns6 );
-                toclient = recvfrom( newsocket, (char *)buffer, 1024, 0, ( struct sockaddr *) &dns6, &testaddrlen );
+                if( ( toclient = recvfrom( newsocket, (char *)buffer, 1024, 0, ( struct sockaddr *) &dns6, &testaddrlen ) ) < 0 ){
+                    // nastal timeout
+                    sendDnsError( socketfd, pd, recvlen, cliaddr6, 2, 1 );
+                    exit( 0 );
+                }
                 sendto( socketfd, buffer, toclient, 0, ( const struct sockaddr * ) &cliaddr6, ( socklen_t ) sizeof( cliaddr6 ) );
 
             }
